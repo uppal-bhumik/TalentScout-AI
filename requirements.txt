@@ -1,5 +1,13 @@
 # Direct dependencies only - pandas/numpy come in via streamlit
 streamlit==1.28.1
+
+# Transitive, but pinned: a fresh resolve of streamlit 1.28.1's stack installs
+# numpy 1.x alongside a pyarrow that requires numpy>=2, and the app dies on
+# import. Only shows up in a clean environment - a container or Streamlit
+# Cloud - never in an existing venv. These two versions agree.
+numpy==1.26.4
+pyarrow==17.0.0
+
 openai==1.102.0
 pydantic==2.11.7          # structured-output schemas in llm_schemas.py
 SQLAlchemy==2.0.36        # persistence in database.py
