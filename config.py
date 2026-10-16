@@ -93,7 +93,7 @@ class Config:
     
     BACKEND_FRAMEWORKS = [
         "Node.js", "Express", "Django", "Flask", "FastAPI", "Spring Boot", 
-        "ASP.NET", "Rails", "Laravel", "Symphony", "Gin", "Fiber"
+        "ASP.NET", "Rails", "Laravel", "Symfony", "Gin", "Fiber"
     ]
     
     DATABASES = [

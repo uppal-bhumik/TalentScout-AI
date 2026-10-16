@@ -312,30 +312,33 @@ Consider:
     
     def _parse_evaluation_response(self, response_text: str) -> Dict:
         """Parse evaluation response from LLM"""
-        score = 5  # default score
-        feedback = "Answer provided."  # default feedback
-        
         lines = response_text.strip().split('\n')
-        
-        for line in lines:
-            if line.lower().startswith('score:'):
-                score_text = line.split(':', 1)[1].strip()
-                # Extract number from score text
-                score_match = re.search(r'(\d+)', score_text)
-                if score_match:
-                    score = min(Config.MAX_SCORE, max(Config.MIN_SCORE, int(score_match.group(1))))
-            elif line.lower().startswith('feedback:'):
-                feedback = line.split(':', 1)[1].strip()
-        
-        # If feedback wasn't found in the expected format, use the entire response
-        if feedback == "Answer provided.":
-            # Remove the score line and use the rest as feedback
-            feedback_lines = [line for line in lines if not line.lower().startswith('score:')]
-            feedback = '\n'.join(feedback_lines).strip()
-        
+
+        score = self._extract_score(response_text, 'Score')
+        if score is None:
+            score = 5  # neutral default when the model gave no readable score
+
+        # Take everything from the "Feedback:" label onwards, so multi-line
+        # feedback survives instead of being truncated to its first line.
+        feedback = None
+        label_pattern = r'^[\s>*_#\-•]*Feedback\s*[:\-]\s*\**\s*(.*)$'
+        for i, line in enumerate(lines):
+            match = re.match(label_pattern, line.strip(), re.IGNORECASE)
+            if match:
+                feedback = '\n'.join([match.group(1).strip()] + lines[i + 1:]).strip()
+                break
+
+        # No "Feedback:" label at all - use the whole response minus any score line
+        if not feedback:
+            score_pattern = r'^[\s>*_#\-•]*Score\s*[:\-]'
+            feedback = '\n'.join(
+                l for l in lines
+                if not re.match(score_pattern, l.strip(), re.IGNORECASE)
+            ).strip()
+
         return {
-            'score': score,
-            'feedback': feedback
+            'score': int(score) if float(score).is_integer() else round(score, 1),
+            'feedback': feedback or "Answer provided."
         }
     
     def _get_fallback_evaluation(self) -> Dict:
@@ -422,29 +425,46 @@ Analysis: [Detailed professional assessment including completion status]
 """
         return prompt
     
+    @staticmethod
+    def _extract_labeled_value(text: str, label: str) -> Optional[str]:
+        """Pull the value for a 'Label: value' line out of an LLM response.
+
+        Tolerates the markdown the model actually emits - '**Overall Score:** 7.5/10',
+        '- Score: 8', '## Recommendation: Hire' - rather than requiring the line to
+        begin with the bare label.
+        """
+        pattern = rf'^[\s>*_#\-•]*{re.escape(label)}\s*[:\-]\s*\**\s*(.+)$'
+        for line in text.split('\n'):
+            match = re.match(pattern, line.strip(), re.IGNORECASE)
+            if match:
+                return match.group(1).strip().strip('*').strip()
+        return None
+
+    @classmethod
+    def _extract_score(cls, text: str, label: str) -> Optional[float]:
+        """Extract a numeric score for a label, accepting '8', '7.5' and '7.5/10'."""
+        value = cls._extract_labeled_value(text, label)
+        if value:
+            match = re.search(r'(\d+(?:\.\d+)?)', value)
+            if match:
+                score = float(match.group(1))
+                return min(Config.MAX_SCORE, max(Config.MIN_SCORE, score))
+        return None
+
     def _parse_final_report(self, response_text: str, evaluations: List[Dict]) -> Dict:
         """Parse final report from LLM response"""
-        overall_score = sum(eval_data['score'] for eval_data in evaluations) / len(evaluations)
-        recommendation = "Maybe"
-        detailed_feedback = response_text
-        
-        lines = response_text.split('\n')
-        
-        for line in lines:
-            if line.lower().startswith('overall score:'):
-                score_text = line.split(':', 1)[1].strip()
-                score_match = re.search(r'(\d+)', score_text)
-                if score_match:
-                    overall_score = min(Config.MAX_SCORE, max(Config.MIN_SCORE, int(score_match.group(1))))
-            elif line.lower().startswith('recommendation:'):
-                recommendation = line.split(':', 1)[1].strip()
-            elif line.lower().startswith('analysis:'):
-                detailed_feedback = line.split(':', 1)[1].strip()
-        
+        # Fall back to the mean of the per-answer scores if the model didn't
+        # state an overall score we can read.
+        overall_score = self._extract_score(response_text, 'Overall Score')
+        if overall_score is None:
+            overall_score = sum(e['score'] for e in evaluations) / len(evaluations)
+
+        recommendation = self._extract_labeled_value(response_text, 'Recommendation') or "Maybe"
+
         return {
             'overall_score': round(overall_score, 1),
             'recommendation': recommendation,
-            'detailed_feedback': detailed_feedback
+            'detailed_feedback': response_text
         }
     
     def _get_fallback_report(self, evaluations: List[Dict]) -> Dict:

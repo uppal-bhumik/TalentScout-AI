@@ -563,15 +563,8 @@ def tech_stack_stage():
     st.markdown("### What technologies make up your primary tech stack?")
     st.write("Select all technologies you're proficient in:")
     
-    # Define technology categories
-    tech_categories = {
-        "Programming Languages": ["Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go", "Rust", "PHP", "Ruby", "Swift", "Kotlin"],
-        "Frontend Frameworks": ["React", "Vue.js", "Angular", "Svelte", "Next.js", "Nuxt.js"],
-        "Backend Frameworks": ["Node.js", "Express", "Django", "Flask", "Spring Boot", "ASP.NET", "Rails"],
-        "Databases": ["MySQL", "PostgreSQL", "MongoDB", "Redis", "Elasticsearch", "Cassandra", "Oracle"],
-        "Cloud Platforms": ["AWS", "Google Cloud", "Azure", "DigitalOcean", "Heroku"],
-        "DevOps Tools": ["Docker", "Kubernetes", "Jenkins", "GitLab CI", "GitHub Actions", "Terraform"]
-    }
+    # Technology categories come from Config so there is one list to maintain
+    tech_categories = Config.get_technology_categories()
     
     selected_technologies = []
     
