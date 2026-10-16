@@ -11,6 +11,7 @@ pyarrow==17.0.0
 openai==1.102.0
 pydantic==2.11.7          # structured-output schemas in llm_schemas.py
 SQLAlchemy==2.0.36        # persistence in database.py
+psycopg2-binary==2.9.10   # only used when DATABASE_URL points at PostgreSQL
 email-validator==2.1.0
 phonenumbers==8.13.25
 python-dotenv==1.0.0
