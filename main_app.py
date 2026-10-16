@@ -609,8 +609,8 @@ def generate_questions_stage():
             st.session_state.candidate_data
         )
         if questions:
-            # Limit to maximum 5 questions
-            st.session_state.technical_questions = questions[:5]
+            # Cap at the configured question count
+            st.session_state.technical_questions = questions[:Config.DEFAULT_QUESTIONS]
             st.session_state.current_stage = 'technical_assessment'
             st.session_state.current_question_index = 0
             # FIXED: Reset assessment state for new question set
@@ -852,18 +852,31 @@ def final_evaluation_stage():
                 col1, col2, col3 = st.columns([1, 1, 1])
                 
                 with col1:
+                    # Show the completion adjustment rather than silently
+                    # applying it, so the candidate can see how it was reached.
+                    penalty_factor = final_report.get('completion_penalty_factor', 1.0)
+                    if penalty_factor < 1.0:
+                        score_note = (
+                            f'<p style="font-size: 0.75em; color: #FFE4B5; margin: 0;">'
+                            f'{final_report["performance_score"]}/10 on answers given '
+                            f'&times; {penalty_factor} completion factor</p>'
+                        )
+                    else:
+                        score_note = ''
                     st.markdown(f'''
                     <div class="metric-card">
                         <h3 style="color: #FFD700;">📊 Overall Score</h3>
-                        <p style="font-size: 2em; font-weight: bold; color: white;">{final_report['overall_score']}/10</p>
+                        <p style="font-size: 2em; font-weight: bold; color: white; margin-bottom: 0;">{final_report['overall_score']}/10</p>
+                        {score_note}
                     </div>
                     ''', unsafe_allow_html=True)
-                
+
                 with col2:
                     st.markdown(f'''
                     <div class="metric-card">
                         <h3 style="color: #87CEEB;">❓ Questions</h3>
-                        <p style="font-size: 2em; font-weight: bold; color: white;">{len(st.session_state.answers)}/5</p>
+                        <p style="font-size: 2em; font-weight: bold; color: white; margin-bottom: 0;">{len(st.session_state.answers)}/{Config.DEFAULT_QUESTIONS}</p>
+                        <p style="font-size: 0.75em; color: #CFE8F3; margin: 0;">{final_report.get('completion_status', '')}</p>
                     </div>
                     ''', unsafe_allow_html=True)
                 

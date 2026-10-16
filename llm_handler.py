@@ -364,11 +364,36 @@ Consider:
             )
             
             report_text = response.choices[0].message.content
-            return self._parse_final_report(report_text, evaluations)
-            
+            report = self._parse_final_report(report_text, evaluations)
+
         except Exception as e:
             print(f"Error generating final report: {e}")
-            return self._get_fallback_report(evaluations)
+            report = self._get_fallback_report(evaluations)
+
+        return self._apply_completion_adjustment(report, len(answers))
+
+    @staticmethod
+    def _apply_completion_adjustment(report: Dict, questions_answered: int) -> Dict:
+        """Apply the fixed early-completion penalty from Config.
+
+        The model scores answer quality only; the completion adjustment happens
+        here instead, so it is deterministic, identical for every candidate and
+        visible in the report rather than buried in the model's judgement.
+        """
+        performance_score = report['overall_score']
+        adjusted = Config.calculate_completion_adjusted_score(
+            performance_score, questions_answered
+        )
+        report.update({
+            'performance_score': round(performance_score, 1),
+            'overall_score': adjusted,
+            'completion_penalty_factor': Config.EARLY_COMPLETION_PENALTY.get(
+                questions_answered, 1.0
+            ),
+            'questions_answered': questions_answered,
+            'completion_status': Config.get_completion_status(questions_answered),
+        })
+        return report
     
     def _create_final_report_prompt(self, candidate_data: Dict, answers: List[Dict], evaluations: List[Dict]) -> str:
         """Create prompt for final report generation"""
@@ -404,7 +429,10 @@ Answer Length: {len(answer['answer'])} characters
         prompt += f"""
 
 Please provide:
-1. Overall Score (1-10) considering both performance and completion rate
+1. Overall Score (1-10) reflecting ONLY the technical quality of the answers
+   actually given. Do not lower the score because fewer questions were
+   answered - a separate fixed completion adjustment handles that, and
+   penalising it here would double-count it.
 2. Recommendation (Strong Hire / Hire / Maybe / No Hire)
 3. Detailed Analysis covering:
    - Technical competency assessment
@@ -416,7 +444,7 @@ Please provide:
    - Fit for experience level
 
 Note: The candidate answered {questions_answered} out of {total_possible_questions} possible questions.
-{"Consider this early completion in your evaluation." if questions_answered < total_possible_questions else ""}
+{"You may comment on the limited evidence this gives you, but score only the answers that were given - the completion adjustment is applied separately." if questions_answered < total_possible_questions else ""}
 
 Format as:
 Overall Score: [1-10]
