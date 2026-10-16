@@ -93,5 +93,5 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-166 tests, no network access and no API key needed: the OpenAI client is mocked,
+202 tests, no network access and no API key needed: the OpenAI client is mocked,
 the database runs in memory, and the email validator's DNS lookup is stubbed.

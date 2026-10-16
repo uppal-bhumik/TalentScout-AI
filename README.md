@@ -61,7 +61,14 @@ LLM calls fail. Three design decisions follow from that:
 
 ```
 TalentScout AI/
-├── main_app.py              # Streamlit entry point, stage routing, results page
+├── main_app.py              # Streamlit entry point: bootstrap, view switch, routing
+├── stages/                  # The candidate interview, one module per phase
+│   ├── profile.py           # Declared profile form steps (name, email, ...)
+│   ├── assessment.py        # Question generation, answering, scoring
+│   └── results.py           # Final report generation and persistence
+├── session.py               # Session state keys, created and reset in one place
+├── app_chrome.py            # Stylesheet, header, profile sidebar, view switch
+├── report_view.py           # Report rendering and exports, shared with the dashboard
 ├── recruiter_view.py        # Recruiter dashboard: list, detail, exports
 ├── llm_handler.py           # LLM calls, retries, fallbacks
 ├── llm_schemas.py           # Pydantic schemas for structured outputs
@@ -71,7 +78,7 @@ TalentScout AI/
 ├── config.py                # Single source of truth for settings
 ├── utils.py                 # Logging, error messages, HTML/CSV export
 ├── static/styles.css        # Application styling
-├── tests/                   # pytest suite (166 tests, no network needed)
+├── tests/                   # pytest suite (202 tests, no network needed)
 ├── Dockerfile               # Container image
 └── DEPLOY.md                # Docker and Streamlit Cloud deployment
 ```
@@ -106,7 +113,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-166 tests covering validation, the scoring arithmetic, config validation,
+202 tests covering validation, the scoring arithmetic, config validation,
 persistence and the LLM layer's retry and fallback paths. No API key and no
 network access are needed: the OpenAI client is mocked, the database runs in
 memory, and the email validator's DNS lookup is stubbed.
