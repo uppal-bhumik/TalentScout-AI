@@ -1,26 +1,24 @@
 """The recruiter dashboard: list past assessments, open one, read its report.
 
 Reads straight from the database, so it shows every assessment any candidate
-has completed - not just the one in the current browser session. Report
-rendering is passed in from main_app rather than duplicated here, which keeps
-a stored assessment looking identical to a live one.
+has completed - not just the one in the current browser session. The report
+itself is rendered by report_view, the same module the candidate's results
+page uses, which keeps a stored assessment looking identical to a live one.
 """
 
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import streamlit as st
 
 import database as db
 from config import Config
+from report_view import render_downloads, render_report
 from utils import calculate_assessment_metrics, get_logger, truncate_text
 
 logger = get_logger("TalentScout.recruiter")
 
 
-def recruiter_dashboard(
-    render_report: Callable,
-    render_downloads: Callable,
-) -> None:
+def recruiter_dashboard() -> None:
     """Entry point for the dashboard view."""
     st.markdown("### 📋 Recruiter Dashboard")
 
@@ -44,7 +42,7 @@ def recruiter_dashboard(
     if selected_id is None:
         _render_list(rows)
     else:
-        _render_detail(selected_id, render_report, render_downloads)
+        _render_detail(selected_id)
 
 
 def _render_list(rows: List[Dict]) -> None:
@@ -129,11 +127,7 @@ def _render_list(rows: List[Dict]) -> None:
             )
 
 
-def _render_detail(
-    assessment_id: int,
-    render_report: Callable,
-    render_downloads: Callable,
-) -> None:
+def _render_detail(assessment_id: int) -> None:
     """One assessment in full, rendered the same way the candidate saw it."""
     if st.button("⬅️ Back to all assessments"):
         st.session_state.recruiter_selected_assessment = None

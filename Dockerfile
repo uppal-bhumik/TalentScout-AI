@@ -21,7 +21,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY config.py conversation_manager.py data_validator.py database.py \
-     llm_handler.py llm_schemas.py main_app.py recruiter_view.py utils.py ./
+     llm_handler.py llm_schemas.py utils.py ./
+COPY app_chrome.py main_app.py recruiter_view.py report_view.py session.py ./
+COPY stages/ ./stages/
 COPY static/ ./static/
 
 # Run as a non-root user that owns the writable directories.
