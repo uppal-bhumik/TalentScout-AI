@@ -1,0 +1,5 @@
+cd "C:\Users\HP\Desktop\TalentScout AI"
+
+talentscout_env\Scripts\activate
+
+streamlit run main_app.py
