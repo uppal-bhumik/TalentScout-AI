@@ -17,6 +17,22 @@ class Config:
     OPENAI_MODEL_EVALUATION = os.getenv('OPENAI_MODEL_EVALUATION') or OPENAI_MODEL
     OPENAI_MODEL_REPORT = os.getenv('OPENAI_MODEL_REPORT') or OPENAI_MODEL
 
+    # Request reliability. Retries are handled in LLMHandler._complete rather
+    # than by the SDK, so the backoff is explicit and testable.
+    OPENAI_TIMEOUT_SECONDS = float(os.getenv('OPENAI_TIMEOUT_SECONDS', '60'))
+    OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '3'))
+    OPENAI_RETRY_BASE_DELAY = float(os.getenv('OPENAI_RETRY_BASE_DELAY', '1.0'))
+    OPENAI_RETRY_MAX_DELAY = float(os.getenv('OPENAI_RETRY_MAX_DELAY', '20.0'))
+
+    # Persistence. SQLite by default; any SQLAlchemy URL works, so the same
+    # code runs against Postgres in a hosted deployment.
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///data/talentscout.db')
+    DATABASE_ECHO = os.getenv('DATABASE_ECHO', 'False').lower() == 'true'
+
+    # Recruiter view - plain shared password, read from the environment. Left
+    # unset, the recruiter view is hidden entirely.
+    RECRUITER_PASSWORD = os.getenv('RECRUITER_PASSWORD')
+
     # Application Settings
     APP_NAME = "TalentScout AI"
     APP_VERSION = "2.1.0"
@@ -67,10 +83,6 @@ class Config:
     LLM_MAX_TOKENS_QUESTIONS = 2000
     LLM_MAX_TOKENS_EVALUATION = 500
     LLM_MAX_TOKENS_REPORT = 1000
-    
-    # File Storage Settings
-    RESULTS_FOLDER = "results"
-    LOGS_FOLDER = "logs"
     
     # UI Settings
     SIDEBAR_WIDTH = 300
@@ -195,7 +207,22 @@ class Config:
         
         if cls.MAX_FAILED_ATTEMPTS <= 0:
             errors.append("MAX_FAILED_ATTEMPTS must be positive.")
-        
+
+        if cls.OPENAI_TIMEOUT_SECONDS <= 0:
+            errors.append("OPENAI_TIMEOUT_SECONDS must be positive.")
+
+        if cls.OPENAI_MAX_RETRIES < 0:
+            errors.append("OPENAI_MAX_RETRIES cannot be negative.")
+
+        if cls.OPENAI_RETRY_BASE_DELAY <= 0:
+            errors.append("OPENAI_RETRY_BASE_DELAY must be positive.")
+
+        if cls.OPENAI_RETRY_MAX_DELAY < cls.OPENAI_RETRY_BASE_DELAY:
+            errors.append("OPENAI_RETRY_MAX_DELAY must be at least OPENAI_RETRY_BASE_DELAY.")
+
+        if not cls.DATABASE_URL:
+            errors.append("DATABASE_URL must not be empty.")
+
         if errors:
             raise ValueError("Configuration validation failed:\n" + "\n".join(f"- {error}" for error in errors))
         

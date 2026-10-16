@@ -1,0 +1,38 @@
+# Secrets - the key is passed in at run time
+.env
+.env.local
+*.key
+.streamlit/secrets.toml
+
+# Virtual environments
+talentscout_env/
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local state
+data/
+logs/
+results/
+*.db
+*.sqlite3
+*.log
+
+# Repository / editor
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+tests/
+pytest.ini
+requirements-dev.txt
+README.md
+DEPLOY.md

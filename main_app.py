@@ -1,16 +1,32 @@
-# main_app.py - Part 1: Imports and Enhanced CSS (FIXED)
+"""TalentScout AI - Streamlit entry point.
 
-import streamlit as st
+Routes the candidate through the profile and assessment stages, and hosts the
+recruiter dashboard (see recruiter_view.py). Everything a candidate does is
+written to the database as it happens, so a refresh loses the UI state but not
+the assessment.
+"""
+
 import json
 from datetime import datetime
-from conversation_manager import ConversationManager
-from llm_handler import LLMHandler
-from data_validator import DataValidator
-from config import Config
+from pathlib import Path
+
+import streamlit as st
 from dotenv import load_dotenv
+
+import database as db
+from config import Config
+from conversation_manager import ConversationManager
+from data_validator import DataValidator
+from llm_handler import LLMHandler
+from recruiter_view import recruiter_dashboard
+from utils import ReportGenerator, get_logger, sanitize_filename
 
 # Load environment variables from .env file
 load_dotenv()
+
+logger = get_logger("TalentScout.app")
+
+STYLESHEET = Path(__file__).parent / "static" / "styles.css"
 
 # Page configuration
 st.set_page_config(
@@ -20,320 +36,34 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# FIXED: Enhanced CSS with proper text visibility and contrast
-st.markdown("""
-<style>
-    /* Import Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Global Styles */
-    .stApp {
-        font-family: 'Inter', sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-    }
-    
-    /* Main container with glassmorphism effect */
-    .main .block-container {
-        background: rgba(255, 255, 255, 0.12);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 20px;
-        padding: 2rem;
-        margin-top: 2rem;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* Header styles with better contrast */
-    .main-header {
-        text-align: center;
-        background: linear-gradient(45deg, #FFD700, #FF6B6B, #4ECDC4, #45B7D1);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-size: 3.5rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .sub-header {
-    text-align: center;
-    color: #000000; /* Set text color to black */
-    font-size: 2rem;
-    word-spacing: 7px;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-    
-    /* Card styles with better visibility */
-    .candidate-info {
-        background: rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(20px);
-        padding: 1.5rem;
-        border-radius: 15px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        margin-bottom: 1rem;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-        color: white !important;
-    }
-    
-    .question-box {
-        background: rgba(70, 130, 255, 0.2);
-        backdrop-filter: blur(15px);
-        padding: 2rem;
-        border-radius: 15px;
-        border: 2px solid rgba(70, 130, 255, 0.4);
-        margin-bottom: 1.5rem;
-        box-shadow: 0 6px 25px rgba(70, 130, 255, 0.3);
-        color: white !important;
-    }
-    
-    .evaluation-box {
-        background: rgba(76, 175, 80, 0.2);
-        backdrop-filter: blur(15px);
-        padding: 1.5rem;
-        border-radius: 15px;
-        border: 2px solid rgba(76, 175, 80, 0.4);
-        margin-bottom: 1rem;
-        box-shadow: 0 6px 25px rgba(76, 175, 80, 0.3);
-        color: white !important;
-    }
-    
-    .final-report-box {
-        background: rgba(255, 193, 7, 0.2);
-        backdrop-filter: blur(15px);
-        padding: 2rem;
-        border-radius: 15px;
-        border: 2px solid rgba(255, 193, 7, 0.4);
-        margin-bottom: 1rem;
-        box-shadow: 0 8px 30px rgba(255, 193, 7, 0.3);
-        color: white !important;
-    }
-    
-    .end-test-box {
-        background: rgba(255, 87, 51, 0.2);
-        backdrop-filter: blur(15px);
-        padding: 1.5rem;
-        border-radius: 15px;
-        border: 2px solid rgba(255, 87, 51, 0.4);
-        margin-bottom: 1rem;
-        box-shadow: 0 6px 25px rgba(255, 87, 51, 0.3);
-        color: white !important;
-    }
-    
-    /* Progress styles with better visibility */
-    .progress-text {
-        text-align: center;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.95) !important;
-        margin-top: 0.5rem;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    }
-    
-    /* FIXED: Button styling with perfect visibility */
-    .stButton > button {
-        background: linear-gradient(45deg, #667eea, #764ba2) !important;
-        color: #ffffff !important;
-        border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        border-radius: 10px !important;
-        padding: 0.5rem 2rem !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3) !important;
-        min-height: 2.5rem !important;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
-        background: linear-gradient(45deg, #5a6fd8, #6b42a6) !important;
-        color: #ffffff !important;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4) !important;
-    }
-    
-    .stButton > button:focus {
-        color: #ffffff !important;
-        outline: none !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4) !important;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3) !important;
-    }
-    
-    .stButton > button:active {
-        color: #ffffff !important;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3) !important;
-    }
-    
-    /* FIXED: Text input with perfect black text on white background */
-    .stTextInput > div > div > input {
-    background: #ffffff !important;
-    backdrop-filter: none !important;
-    border: 2px solid rgba(102, 126, 234, 0.4) !important;
-    border-radius: 10px !important;
-    color: #000000 !important;
-    font-weight: 500 !important;
-    font-size: 16px !important;
-    padding: 12px 16px !important;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
-}
-    
-    .stTextInput > div > div > input:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
-        color: #000000 !important;
-        outline: none !important;
-        background: #ffffff !important;
-    }
-    
-    .stTextInput > div > div > input::placeholder {
-        color: #666666 !important;
-        opacity: 0.7 !important;
-    }
-    
-    /* FIXED: TextArea with perfect black text on white background */
-    .stTextArea > div > div > textarea {
-        background: #ffffff !important;
-        backdrop-filter: none !important;
-        border: 2px solid rgba(102, 126, 234, 0.4) !important;
-        border-radius: 10px !important;
-        color: #000000 !important;
-        font-weight: 500 !important;
-        font-size: 16px !important;
-        padding: 12px 16px !important;
-        line-height: 1.5 !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
-        resize: vertical !important;
-    }
-    
-    .stTextArea > div > div > textarea:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
-        color: #000000 !important;
-        outline: none !important;
-        background: #ffffff !important;
-    }
-    
-    .stTextArea > div > div > textarea::placeholder {
-        color: #666666 !important;
-        opacity: 0.7 !important;
-        font-style: italic !important;
-    }
 
-/* FIXED: Selectbox with perfect black text on white background */
-.stSelectbox > div > div > select {
-    background: #ffffff !important;
-    backdrop-filter: none !important;
-    border: 2px solid rgba(102, 126, 234, 0.4) !important;
-    border-radius: 10px !important;
-    color: #000000 !important;
-    font-weight: 500 !important;
-    font-size: 16px !important;
-    padding: 8px 12px !important;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
-}
+@st.cache_data
+def _read_stylesheet(mtime: float) -> str:
+    """Read the stylesheet, caching on its modification time.
 
-.stSelectbox > div > div > select option {
-    background: #ffffff !important;
-    color: #000000 !important;
-}
-    
-    .stSelectbox > div > div > select:focus {
-        color: #000000 !important;
-        border-color: #667eea !important;
-        outline: none !important;
-        background: #ffffff !important;
-    }
-    
-    .stSelectbox > div > div > select option {
-        background: #ffffff !important;
-        color: #000000 !important;
-    }
-    
-    /* Checkbox styling with better visibility */
-    .stCheckbox {
-        color: rgba(255, 255, 255, 0.95) !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    }
-    
-    .stCheckbox > label {
-        color: rgba(255, 255, 255, 0.95) !important;
-        font-weight: 500 !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    }
-    
-    /* Input labels with better visibility */
-    .stTextInput > label,
-    .stTextArea > label,
-    .stSelectbox > label,
-    .stNumberInput > label {
-        color: rgba(255, 255, 255, 0.95) !important;
-        font-weight: 600 !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        margin-bottom: 0.5rem !important;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background: rgba(255, 255, 255, 0.12);
-        backdrop-filter: blur(20px);
-    }
-    
-    /* Metric styles with better visibility */
-    .metric-card {
-        background: rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(20px);
-        padding: 1.5rem;
-        border-radius: 15px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        text-align: center;
-        margin: 1rem 0;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-        color: white !important;
-    }
-    
-    /* Text color overrides for better readability */
-    .stMarkdown, .stText, p, span, div {
-        color: rgba(255, 255, 255, 0.95) !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    }
-    
-    h1, h2, h3, h4, h5, h6 {
-        color: rgba(255, 255, 255, 0.95) !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-    }
-    
-    /* Progress bar styling */
-    .stProgress .st-bo {
-        background-color: rgba(255, 255, 255, 0.3);
-    }
-    
-    .stProgress .st-bp {
-        background-color: #4CAF50;
-    }
-    
-    /* Alert and message styling */
-    .stAlert, .stSuccess, .stError, .stWarning, .stInfo {
-        background: rgba(255, 255, 255, 0.15) !important;
-        backdrop-filter: blur(15px) !important;
-        border-radius: 10px !important;
-        border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        color: white !important;
-    }
-    
-    .stAlert [data-baseweb="notification"], 
-    .stSuccess [data-baseweb="notification"], 
-    .stError [data-baseweb="notification"], 
-    .stWarning [data-baseweb="notification"], 
-    .stInfo [data-baseweb="notification"] {
-        background: transparent !important;
-        color: white !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-# Part 2: Session State Initialization and Helper Functions (FIXED)
+    `mtime` is not used in the body - it is the cache key, so an edit to the
+    file is picked up on the next rerun instead of needing a restart.
+    """
+    try:
+        return STYLESHEET.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Could not read %s: %s", STYLESHEET, exc)
+        return ""
+
+
+def load_stylesheet():
+    """Inject the app's CSS, which lives in static/styles.css."""
+    try:
+        mtime = STYLESHEET.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+
+    css = _read_stylesheet(mtime)
+    if css:
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+load_stylesheet()
 
 def initialize_session_state():
     """Initialize session state variables with proper state management"""
@@ -362,7 +92,17 @@ def initialize_session_state():
     
     if 'test_ended_early' not in st.session_state:
         st.session_state.test_ended_early = False
-    
+
+    # Database id of the row backing this assessment, set once the questions
+    # have been generated.
+    if 'assessment_id' not in st.session_state:
+        st.session_state.assessment_id = None
+
+    # The final report is generated once and kept here. Without this it would
+    # be regenerated - and re-billed - on every rerun of the results page.
+    if 'final_report' not in st.session_state:
+        st.session_state.final_report = None
+
     # FIXED: Better state management for preventing issues
     if 'current_answer' not in st.session_state:
         st.session_state.current_answer = ""
@@ -608,21 +348,50 @@ def generate_questions_stage():
         questions = st.session_state.llm_handler.generate_technical_questions(
             st.session_state.candidate_data
         )
-        if questions:
-            # Cap at the configured question count
-            st.session_state.technical_questions = questions[:Config.DEFAULT_QUESTIONS]
-            st.session_state.current_stage = 'technical_assessment'
-            st.session_state.current_question_index = 0
-            # FIXED: Reset assessment state for new question set
-            st.session_state.current_answer = ""
-            st.session_state.show_evaluation = False
-            st.session_state.last_submitted_question = -1
-            st.success(f"Generated {len(st.session_state.technical_questions)} personalized questions!")
+
+    if not questions:
+        st.error("Failed to generate questions. Please try again.")
+        if st.button("Try Again"):
             st.rerun()
-        else:
-            st.error("Failed to generate questions. Please try again.")
-            if st.button("Try Again"):
-                st.rerun()
+        return
+
+    # Cap at the configured question count
+    questions = questions[:Config.DEFAULT_QUESTIONS]
+    st.session_state.technical_questions = questions
+
+    # Open the database record now, so answers can be stored as they arrive
+    # rather than only at the end.
+    try:
+        st.session_state.assessment_id = db.create_assessment(
+            st.session_state.candidate_data, questions
+        )
+    except Exception as exc:  # a storage failure must not end the interview
+        logger.exception("Could not create the assessment record: %s", exc)
+        st.warning(
+            "⚠️ This assessment could not be saved to the database, so it will not "
+            "appear in the recruiter dashboard. The interview itself will work normally."
+        )
+
+    st.session_state.current_stage = 'technical_assessment'
+    st.session_state.current_question_index = 0
+    # FIXED: Reset assessment state for new question set
+    st.session_state.current_answer = ""
+    st.session_state.show_evaluation = False
+    st.session_state.last_submitted_question = -1
+    st.session_state.final_report = None
+    st.rerun()
+
+
+def degraded_questions_warning():
+    """Tell the candidate when the questions are not personalised."""
+    questions = st.session_state.get('technical_questions') or []
+    degraded = next((q for q in questions if q.get('degraded')), None)
+    if degraded:
+        st.warning(
+            "⚠️ **These questions are not personalised.** The question generator "
+            f"could not be reached, so a generic set is being used. Reason: "
+            f"{degraded.get('degraded_reason', 'unknown')}"
+        )
 
 # FIXED: Complete rewrite of technical assessment with proper state management
 # FIXED: Complete rewrite of technical assessment with proper question display
@@ -646,7 +415,9 @@ def technical_assessment_stage():
     
     # Assessment header
     st.markdown(f"### Technical Assessment - Question {current_q_index + 1} of {total_questions}")
-    
+
+    degraded_questions_warning()
+
     # Progress bar
     progress = (current_q_index + 1) / total_questions
     st.progress(progress)
@@ -715,8 +486,16 @@ def technical_assessment_stage():
     if show_current_evaluation:
         # Display current evaluation and next button
         latest_evaluation = st.session_state.evaluations[-1]
+
+        if latest_evaluation.get('degraded'):
+            st.warning(
+                "⚠️ **This answer could not be scored.** It has been recorded with a "
+                "placeholder score of 5/10 and flagged for human review. Reason: "
+                f"{latest_evaluation.get('degraded_reason', 'unknown')}"
+            )
+
         score_color = "#4CAF50" if latest_evaluation['score'] >= 7 else "#FF9800" if latest_evaluation['score'] >= 5 else "#F44336"
-        
+
         st.markdown(f'''
         <div class="evaluation-box">
             <h4>✅ Answer Submitted Successfully!</h4>
@@ -724,7 +503,7 @@ def technical_assessment_stage():
             <p><strong>Feedback:</strong> {latest_evaluation['feedback']}</p>
         </div>
         ''', unsafe_allow_html=True)
-        
+
         # Show next/finish button
         if current_q_index + 1 < total_questions:
             if st.button("Continue to Next Question ➡️", type="primary", key=f"next_question_btn_{current_q_index}"):
@@ -794,40 +573,71 @@ def move_to_next_question():
         else:
             st.warning("Please answer at least one question to get an evaluation.")
 
-# FIXED: Separate function for answer evaluation
 def evaluate_current_answer(question, answer, question_index):
-    """FIXED: Evaluate the current answer and update state properly"""
+    """Score the current answer, store it in session state and persist it."""
     with st.spinner("Evaluating your answer..."):
         evaluation = st.session_state.llm_handler.evaluate_answer(
             question,
             answer,
             st.session_state.candidate_data
         )
-        
-        if evaluation:
-            # Store answer and evaluation
-            st.session_state.answers.append({
-                'question': question['question'],
-                'answer': answer,
-                'category': question.get('category', 'General')
-            })
-            st.session_state.evaluations.append(evaluation)
-            
-            # FIXED: Set flags to show evaluation
-            st.session_state.show_evaluation = True
-            st.session_state.last_submitted_question = question_index
-            st.balloons()
-            st.rerun()
-        else:
-            st.error("Failed to evaluate answer. Please try again.")
 
-# Part 5: Final Evaluation Stage and Main Function (COMPLETE)
+    record = {
+        'question': question['question'],
+        'answer': answer,
+        'category': question.get('category', 'General'),
+        'question_index': question_index,
+    }
+
+    # The candidate can navigate back and answer again, so replace any earlier
+    # attempt at this question instead of recording it twice - a duplicate
+    # would be counted twice in the final report.
+    existing = next(
+        (i for i, a in enumerate(st.session_state.answers)
+         if a.get('question_index') == question_index),
+        None,
+    )
+    if existing is None:
+        st.session_state.answers.append(record)
+        st.session_state.evaluations.append(evaluation)
+    else:
+        st.session_state.answers[existing] = record
+        st.session_state.evaluations[existing] = evaluation
+
+    if st.session_state.assessment_id is not None:
+        try:
+            db.record_answer(
+                st.session_state.assessment_id, question_index, answer, evaluation
+            )
+        except Exception as exc:  # never lose an answer to a storage error
+            logger.exception("Could not persist answer %d: %s", question_index, exc)
+
+    # A new answer invalidates any report generated earlier.
+    st.session_state.final_report = None
+    st.session_state.show_evaluation = True
+    st.session_state.last_submitted_question = question_index
+    if not evaluation.get('degraded'):
+        st.balloons()
+    st.rerun()
+
+def reset_session():
+    """Clear everything and go back to the welcome screen."""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
+
+def score_colour(score: float) -> str:
+    """Traffic-light colour for a 1-10 score."""
+    if score >= 7:
+        return "#4CAF50"
+    return "#FF9800" if score >= 5 else "#F44336"
+
 
 def final_evaluation_stage():
-    """Show final evaluation and results with enhanced design"""
+    """Show the final evaluation, persist it and offer the exports."""
     st.markdown("### 🎉 Assessment Complete!")
-    
-    # Check if test was ended early
+
     if st.session_state.test_ended_early:
         st.markdown(f"""
         <div class="end-test-box">
@@ -835,123 +645,238 @@ def final_evaluation_stage():
             <p>Evaluation based on {len(st.session_state.answers)} completed question(s)</p>
         </div>
         """, unsafe_allow_html=True)
-    
-    st.write("Thank you for completing the technical assessment. Here's your comprehensive evaluation:")
-    
-    # Generate final report
-    if st.session_state.evaluations:  # Only generate if there are evaluations
-        with st.spinner("Generating your final report..."):
-            final_report = st.session_state.llm_handler.generate_final_report(
-                st.session_state.candidate_data,
-                st.session_state.answers,
-                st.session_state.evaluations
-            )
-            
-            if final_report:
-                # Display results with enhanced metrics cards
-                col1, col2, col3 = st.columns([1, 1, 1])
-                
-                with col1:
-                    # Show the completion adjustment rather than silently
-                    # applying it, so the candidate can see how it was reached.
-                    penalty_factor = final_report.get('completion_penalty_factor', 1.0)
-                    if penalty_factor < 1.0:
-                        score_note = (
-                            f'<p style="font-size: 0.75em; color: #FFE4B5; margin: 0;">'
-                            f'{final_report["performance_score"]}/10 on answers given '
-                            f'&times; {penalty_factor} completion factor</p>'
-                        )
-                    else:
-                        score_note = ''
-                    st.markdown(f'''
-                    <div class="metric-card">
-                        <h3 style="color: #FFD700;">📊 Overall Score</h3>
-                        <p style="font-size: 2em; font-weight: bold; color: white; margin-bottom: 0;">{final_report['overall_score']}/10</p>
-                        {score_note}
-                    </div>
-                    ''', unsafe_allow_html=True)
 
-                with col2:
-                    st.markdown(f'''
-                    <div class="metric-card">
-                        <h3 style="color: #87CEEB;">❓ Questions</h3>
-                        <p style="font-size: 2em; font-weight: bold; color: white; margin-bottom: 0;">{len(st.session_state.answers)}/{Config.DEFAULT_QUESTIONS}</p>
-                        <p style="font-size: 0.75em; color: #CFE8F3; margin: 0;">{final_report.get('completion_status', '')}</p>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                
-                with col3:
-                    rec_color = "#90EE90" if "Strong Hire" in final_report['recommendation'] else "#FFB6C1" if "Hire" in final_report['recommendation'] else "#FFA07A"
-                    st.markdown(f'''
-                    <div class="metric-card">
-                        <h3 style="color: #DDA0DD;">🎯 Recommendation</h3>
-                        <p style="font-size: 1.2em; font-weight: bold; color: {rec_color};">{final_report['recommendation']}</p>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                
-                # Detailed feedback with enhanced styling
-                st.markdown("### 📈 Detailed Analysis")
-                st.markdown(f'''
-                <div class="final-report-box">
-                    <p style="color: white; font-size: 1.1em; line-height: 1.6;">{final_report['detailed_feedback']}</p>
-                </div>
-                ''', unsafe_allow_html=True)
-                
-                # Individual question breakdown
-                if st.session_state.answers and st.session_state.evaluations:
-                    st.markdown("### 🔍 Question-wise Breakdown")
-                    for i, (answer, evaluation) in enumerate(zip(st.session_state.answers, st.session_state.evaluations)):
-                        score_color = "#4CAF50" if evaluation['score'] >= 7 else "#FF9800" if evaluation['score'] >= 5 else "#F44336"
-                        with st.expander(f"Question {i+1}: {evaluation['score']}/10", expanded=False):
-                            st.markdown(f"**Question:** {answer['question']}")
-                            st.markdown(f"**Category:** {answer.get('category', 'General').title()}")
-                            st.markdown(f"**Your Answer:** {answer['answer']}")
-                            st.markdown(f"**Score:** <span style='color: {score_color}; font-weight: bold;'>{evaluation['score']}/10</span>", unsafe_allow_html=True)
-                            st.markdown(f"**Feedback:** {evaluation['feedback']}")
-                
-                # Save results
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                results = {
-                    'candidate_data': st.session_state.candidate_data,
-                    'answers': st.session_state.answers,
-                    'evaluations': st.session_state.evaluations,
-                    'final_report': final_report,
-                    'test_ended_early': st.session_state.test_ended_early,
-                    'questions_answered': len(st.session_state.answers),
-                    'total_questions_generated': len(st.session_state.technical_questions),
-                    'timestamp': timestamp
-                }
-                
-                # Download results
-                st.download_button(
-                    label="📄 Download Full Report",
-                    data=json.dumps(results, indent=2),
-                    file_name=f"assessment_report_{st.session_state.candidate_data.get('name', 'candidate').replace(' ', '_')}_{timestamp}.json",
-                    mime="application/json"
-                )
-                
-                # Restart option
-                st.markdown("---")
-                col_restart1, col_restart2 = st.columns([1, 4])
-                with col_restart1:
-                    if st.button("🔄 Start New Assessment"):
-                        # Clear all session state
-                        for key in list(st.session_state.keys()):
-                            del st.session_state[key]
-                        st.rerun()
-                
-            else:
-                st.error("Failed to generate final report. Please try again.")
-                if st.button("Try Again"):
-                    st.rerun()
-    
-    else:
-        # Handle case where no questions were answered
+    st.write(
+        "Thank you for completing the technical assessment. "
+        "Here's your comprehensive evaluation:"
+    )
+
+    if not st.session_state.evaluations:
         st.warning("No questions were answered. Assessment cannot be completed.")
         if st.button("🔄 Start Over"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
+            reset_session()
+        return
+
+    # Generate the report once and keep it. Regenerating it on every rerun
+    # would bill another API call for every button click on this page.
+    if st.session_state.final_report is None:
+        with st.spinner("Generating your final report..."):
+            st.session_state.final_report = st.session_state.llm_handler.generate_final_report(
+                st.session_state.candidate_data,
+                st.session_state.answers,
+                st.session_state.evaluations,
+            )
+
+        if st.session_state.assessment_id is not None:
+            try:
+                db.save_final_report(
+                    st.session_state.assessment_id,
+                    st.session_state.final_report,
+                    ended_early=st.session_state.test_ended_early,
+                )
+            except Exception as exc:
+                logger.exception("Could not persist the final report: %s", exc)
+                st.warning(
+                    "⚠️ This report could not be saved to the database. It is shown "
+                    "below and can still be downloaded."
+                )
+
+    final_report = st.session_state.final_report
+
+    if final_report.get('degraded'):
+        st.warning(
+            "⚠️ **This report was produced in degraded mode.** "
+            f"{final_report.get('degraded_reason', 'Some scores are placeholders.')} "
+            "Treat the numbers below as provisional — they need a human review."
+        )
+
+    render_report(
+        final_report,
+        st.session_state.candidate_data,
+        st.session_state.answers,
+        st.session_state.evaluations,
+    )
+
+    st.markdown("---")
+    render_downloads(
+        final_report,
+        st.session_state.candidate_data,
+        st.session_state.answers,
+        st.session_state.evaluations,
+        extra={
+            'test_ended_early': st.session_state.test_ended_early,
+            'total_questions_generated': len(st.session_state.technical_questions),
+            'assessment_id': st.session_state.assessment_id,
+        },
+    )
+
+    st.markdown("---")
+    col_restart1, col_restart2 = st.columns([1, 4])
+    with col_restart1:
+        if st.button("🔄 Start New Assessment"):
+            reset_session()
+
+
+def render_report(final_report, candidate_data, answers, evaluations):
+    """Render the score cards, analysis and per-question breakdown.
+
+    Shared by the candidate's results page and the recruiter dashboard, so a
+    stored assessment looks exactly like a live one.
+    """
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        # Show the completion adjustment rather than silently applying it, so
+        # the arithmetic behind the score is visible.
+        penalty_factor = final_report.get('completion_penalty_factor', 1.0)
+        if penalty_factor < 1.0:
+            score_note = (
+                f'<p style="font-size: 0.75em; color: #FFE4B5; margin: 0;">'
+                f'{final_report["performance_score"]}/10 on answers given '
+                f'&times; {penalty_factor} completion factor</p>'
+            )
+        else:
+            score_note = ''
+        st.markdown(f'''
+        <div class="metric-card">
+            <h3 style="color: #FFD700;">📊 Overall Score</h3>
+            <p style="font-size: 2em; font-weight: bold; color: white; margin-bottom: 0;">{final_report['overall_score']}/10</p>
+            {score_note}
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f'''
+        <div class="metric-card">
+            <h3 style="color: #87CEEB;">❓ Questions</h3>
+            <p style="font-size: 2em; font-weight: bold; color: white; margin-bottom: 0;">{len(answers)}/{Config.DEFAULT_QUESTIONS}</p>
+            <p style="font-size: 0.75em; color: #CFE8F3; margin: 0;">{final_report.get('completion_status', '')}</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with col3:
+        recommendation = final_report.get('recommendation', 'N/A')
+        rec_color = (
+            "#90EE90" if "Strong Hire" in recommendation
+            else "#FFB6C1" if "Hire" in recommendation
+            else "#FFA07A"
+        )
+        st.markdown(f'''
+        <div class="metric-card">
+            <h3 style="color: #DDA0DD;">🎯 Recommendation</h3>
+            <p style="font-size: 1.2em; font-weight: bold; color: {rec_color};">{recommendation}</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    st.markdown("### 📈 Detailed Analysis")
+    st.markdown(f'''
+    <div class="final-report-box">
+        <p style="color: white; font-size: 1.1em; line-height: 1.6;">{final_report.get('detailed_feedback', '')}</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    if answers and evaluations:
+        st.markdown("### 🔍 Question-wise Breakdown")
+        for i, (answer, evaluation) in enumerate(zip(answers, evaluations)):
+            flag = " ⚠️ not scored" if evaluation.get('degraded') else ""
+            with st.expander(f"Question {i + 1}: {evaluation['score']}/10{flag}", expanded=False):
+                st.markdown(f"**Question:** {answer['question']}")
+                st.markdown(f"**Category:** {answer.get('category', 'General').title()}")
+                st.markdown(f"**Answer:** {answer['answer']}")
+                st.markdown(
+                    f"**Score:** <span style='color: {score_colour(evaluation['score'])}; "
+                    f"font-weight: bold;'>{evaluation['score']}/10</span>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(f"**Feedback:** {evaluation['feedback']}")
+                if evaluation.get('degraded'):
+                    st.caption(
+                        "Placeholder score — automated scoring failed: "
+                        f"{evaluation.get('degraded_reason', 'unknown')}"
+                    )
+
+
+def render_downloads(final_report, candidate_data, answers, evaluations, extra=None):
+    """Offer the assessment as JSON, HTML or CSV."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stem = f"assessment_{sanitize_filename(candidate_data.get('name', 'candidate'))}_{timestamp}"
+
+    payload = {
+        'candidate_data': candidate_data,
+        'answers': answers,
+        'evaluations': evaluations,
+        'final_report': final_report,
+        'questions_answered': len(answers),
+        'timestamp': timestamp,
+    }
+    payload.update(extra or {})
+
+    col_json, col_html, col_csv = st.columns(3)
+
+    with col_json:
+        st.download_button(
+            label="📄 Download JSON",
+            data=json.dumps(payload, indent=2, default=str),
+            file_name=f"{stem}.json",
+            mime="application/json",
+            key=f"dl_json_{stem}",
+        )
+
+    with col_html:
+        st.download_button(
+            label="🖨️ Download HTML report",
+            data=ReportGenerator.generate_html_report(
+                candidate_data, answers, evaluations, final_report
+            ),
+            file_name=f"{stem}.html",
+            mime="text/html",
+            key=f"dl_html_{stem}",
+        )
+
+    with col_csv:
+        st.download_button(
+            label="📊 Download CSV summary",
+            data=ReportGenerator.generate_csv_summary(candidate_data, evaluations),
+            file_name=f"{stem}.csv",
+            mime="text/csv",
+            key=f"dl_csv_{stem}",
+        )
+
+def sidebar_navigation() -> str:
+    """Choose between the candidate interview and the recruiter dashboard.
+
+    Returns 'interview' or 'recruiter'. The dashboard holds candidate contact
+    details, so when RECRUITER_PASSWORD is set it has to be entered first; on
+    a local machine with no password configured it is open.
+    """
+    with st.sidebar:
+        st.markdown("### 🧭 View")
+        view = st.radio(
+            "View",
+            options=['interview', 'recruiter'],
+            format_func=lambda v: (
+                "📝 Candidate interview" if v == 'interview' else "📋 Recruiter dashboard"
+            ),
+            label_visibility="collapsed",
+            key="active_view",
+        )
+
+        if view == 'recruiter' and Config.RECRUITER_PASSWORD:
+            if not st.session_state.get('recruiter_authenticated'):
+                entered = st.text_input(
+                    "Recruiter password", type="password", key="recruiter_password_input"
+                )
+                if entered:
+                    if entered == Config.RECRUITER_PASSWORD:
+                        st.session_state.recruiter_authenticated = True
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password.")
+                st.info("Enter the recruiter password to view past assessments.")
+                return 'locked'
+
+    return view
+
 
 def main():
     """Main application function with proper routing"""
@@ -966,13 +891,33 @@ def main():
         st.info("Copy `.env.example` to `.env`, add your OpenAI API key, then restart the app.")
         st.stop()
 
+    # Open the database (and create the schema on first run) before anything
+    # tries to read or write it.
+    try:
+        db.init_db()
+    except Exception as exc:
+        logger.exception("Database unavailable: %s", exc)
+        st.warning(
+            "⚠️ The database could not be opened, so assessments will not be saved "
+            "and the recruiter dashboard is unavailable. Interviews still work."
+        )
+
     initialize_session_state()
     display_header()
+
+    view = sidebar_navigation()
+    if view == 'recruiter':
+        recruiter_dashboard(render_report, render_downloads)
+        return
+    if view == 'locked':
+        st.info("🔒 The recruiter dashboard is password protected.")
+        return
+
     display_candidate_profile()
-    
+
     # Route to appropriate stage
     current_stage = st.session_state.current_stage
-    
+
     if current_stage == 'welcome':
         welcome_stage()
     elif current_stage == 'name':

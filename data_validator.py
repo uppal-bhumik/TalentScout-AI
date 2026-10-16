@@ -1,16 +1,22 @@
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import phonenumbers
 from email_validator import validate_email, EmailNotValidError
 
+from config import Config
+
 class DataValidator:
     """Validates user input data for the TalentScout AI application"""
-    
+
     def __init__(self):
-        # Common patterns for validation
-        self.name_pattern = re.compile(r'^[a-zA-Z\s\-\'\.]{2,50}$')
-        self.location_pattern = re.compile(r'^[a-zA-Z\s\-\',\.]{2,100}$')
-        
+        # Length limits come from Config so there is one place to change them.
+        self.name_pattern = re.compile(
+            rf'^[a-zA-Z\s\-\'\.]{{{Config.MIN_NAME_LENGTH},{Config.MAX_NAME_LENGTH}}}$'
+        )
+        self.location_pattern = re.compile(
+            rf'^[a-zA-Z\s\-\',\.]{{{Config.MIN_LOCATION_LENGTH},{Config.MAX_LOCATION_LENGTH}}}$'
+        )
+
         # Blocked/suspicious patterns
         self.blocked_patterns = [
             r'test\s*\d*',
@@ -29,7 +35,7 @@ class DataValidator:
         name = name.strip()
         
         # Check length
-        if len(name) < 2 or len(name) > 50:
+        if len(name) < Config.MIN_NAME_LENGTH or len(name) > Config.MAX_NAME_LENGTH:
             return False
         
         # Check for blocked patterns
@@ -63,6 +69,9 @@ class DataValidator:
             if re.search(pattern, email, re.IGNORECASE):
                 return False
         
+        if len(email) > Config.MAX_EMAIL_LENGTH:
+            return False
+
         # Basic format check first
         if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
             return False
@@ -89,7 +98,10 @@ class DataValidator:
             return False
         
         phone = phone.strip()
-        
+
+        if len(phone) > Config.MAX_PHONE_LENGTH:
+            return False
+
         # Check for blocked patterns
         for pattern in self.blocked_patterns:
             if re.search(pattern, phone, re.IGNORECASE):
@@ -134,7 +146,7 @@ class DataValidator:
         location = location.strip()
         
         # Check length
-        if len(location) < 2 or len(location) > 100:
+        if len(location) < Config.MIN_LOCATION_LENGTH or len(location) > Config.MAX_LOCATION_LENGTH:
             return False
         
         # Check for blocked patterns
@@ -157,7 +169,7 @@ class DataValidator:
         if not tech_stack or not isinstance(tech_stack, list):
             return False
         
-        if len(tech_stack) > 20:  # Reasonable upper limit
+        if len(tech_stack) > Config.MAX_TECH_STACK_ITEMS:
             return False
         
         for tech in tech_stack:
@@ -196,11 +208,11 @@ class DataValidator:
         answer = answer.strip()
         
         # Check minimum length (should be substantial)
-        if len(answer) < 10:
+        if len(answer) < Config.MIN_ANSWER_LENGTH:
             return False
-        
+
         # Check maximum length (reasonable upper bound)
-        if len(answer) > 5000:
+        if len(answer) > Config.MAX_ANSWER_LENGTH:
             return False
         
         # Check for blocked patterns (but be more lenient for technical content)

@@ -45,3 +45,11 @@ htmlcov/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local database
+data/
+*.db
+*.sqlite3
+
+# Claude Code local preview config
+.claude/
